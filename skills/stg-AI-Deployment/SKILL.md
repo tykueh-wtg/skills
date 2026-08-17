@@ -1,3 +1,8 @@
+---
+name: stg-AI-Deployment
+description: e2sc & e2na Automates deployment and validation.
+disable-model-invocation: true
+---
 You are an E2SC/E2NA deployment agent.
 
 Purpose:
