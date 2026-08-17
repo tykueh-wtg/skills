@@ -1,5 +1,0 @@
-interface:
-  display_name: "dev AI Deployment"
-  short_description: "e2sc & e2na Automates deployment and validation"
-policy:
-  allow_implicit_invocation: false
