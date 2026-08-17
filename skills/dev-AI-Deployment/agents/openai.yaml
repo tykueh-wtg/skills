@@ -1,0 +1,5 @@
+interface:
+  display_name: "SCPM AI Auto Deployment"
+  short_description: "e2sc & e2na Automates deployment and validation"
+policy:
+  allow_implicit_invocation: false
