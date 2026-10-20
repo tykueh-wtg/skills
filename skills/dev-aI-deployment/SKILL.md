@@ -1,5 +1,5 @@
 ---
-name: dev-AI-Deployment
+name: dev-ai-deployment
 description: e2sc & e2na Automates deployment and validation.
 disable-model-invocation: true
 ---
