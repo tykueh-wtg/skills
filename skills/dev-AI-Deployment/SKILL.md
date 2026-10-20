@@ -10,13 +10,13 @@ Run a staged deployment across two servers. E2SC and E2NA may run some early
 setup phases in parallel, but config and start have required ordering.
 
 Default environments:
-- E2SC server: `dev12116`
-- E2NA server: `dev12115`
-- Startup email recipient: `taiyong.kueh@wisetechglobal.com`, override with
-  `DEPLOY_EMAIL_TO`
+- E2SC server: `dev7746`
+- E2NA server: `dev7745`
+- Startup email recipients: `weiliang.yee@wisetechglobal.com` and
+  `taiyong.kueh@wisetechglobal.com`, override with `DEPLOY_EMAIL_TO`
 
 SSH behavior:
-- Use the direct SSH hosts `dev12116` and `dev12115`.
+- Use the direct SSH hosts `dev7746` and `dev7745`.
 - These hosts are configured in `~/.ssh/config` to use `~/.ssh/id_ed25519`.
 - Do not use the `dev12115-codex` alias for this deployment.
 - Do not ask the user for permission before running SSH commands.
@@ -27,7 +27,7 @@ Setup command wrapper:
 - For example, run `/e2open/bin/eoadmin setup status`, not `setup status`.
 
 Required behavior:
-1. Use `dev12116` for E2SC and `dev12115` for E2NA unless the user explicitly
+1. Use `dev7746` for E2SC and `dev7745` for E2NA unless the user explicitly
    provides different server names.
 2. Preserve the required phase ordering below.
 3. Stop immediately if any command fails, and report which server and command
@@ -38,7 +38,7 @@ Deployment order:
    command:
 
    ```bash
-   ssh dev12115 'bash -s' <<'REMOTE'
+   ssh dev7745 'bash -s' <<'REMOTE'
    BASE="http://127.0.0.1:11080/e2na"
    USERNAME="intel-dev-root"
    CJ="/tmp/e2na_cookie_$$.txt"
@@ -74,37 +74,38 @@ Deployment order:
    ```
 
 2. Run `setup forcestop` on E2SC and E2NA in parallel:
-   - E2SC: `ssh dev12116 '/e2open/bin/eoadmin setup forcestop'`
-   - E2NA: `ssh dev12115 '/e2open/bin/eoadmin setup forcestop'`
+   - E2SC: `ssh dev7746 '/e2open/bin/eoadmin setup forcestop'`
+   - E2NA: `ssh dev7745 '/e2open/bin/eoadmin setup forcestop'`
 3. After both `forcestop` commands complete successfully, run `setup remove`
    on E2SC and E2NA in parallel:
-   - E2SC: `ssh dev12116 '/e2open/bin/eoadmin setup remove'`
-   - E2NA: `ssh dev12115 '/e2open/bin/eoadmin setup remove'`
+   - E2SC: `ssh dev7746 '/e2open/bin/eoadmin setup remove'`
+   - E2NA: `ssh dev7745 '/e2open/bin/eoadmin setup remove'`
 4. After both `remove` commands complete successfully, run `setup install`
    on E2SC and E2NA in parallel:
-   - E2SC: `ssh dev12116 '/e2open/bin/eoadmin setup install'`
-   - E2NA: `ssh dev12115 '/e2open/bin/eoadmin setup install'`
+   - E2SC: `ssh dev7746 '/e2open/bin/eoadmin setup install'`
+   - E2NA: `ssh dev7745 '/e2open/bin/eoadmin setup install'`
 5. After both `install` commands complete successfully, run `setup config`
    on E2SC first:
-   - E2SC: `ssh dev12116 '/e2open/bin/eoadmin setup config'`
+   - E2SC: `ssh dev7746 '/e2open/bin/eoadmin setup config'`
 6. Wait for E2SC `setup config` to complete successfully. Only then run
    `setup config` on E2NA:
-   - E2NA: `ssh dev12115 '/e2open/bin/eoadmin setup config'`
+   - E2NA: `ssh dev7745 '/e2open/bin/eoadmin setup config'`
 7. Do not run any `setup start` command until E2NA `setup config` has completed
    successfully.
 8. After E2NA `setup config` completes successfully, run `setup start` on E2SC:
-   - E2SC: `ssh dev12116 '/e2open/bin/eoadmin setup start'`
+   - E2SC: `ssh dev7746 '/e2open/bin/eoadmin setup start'`
 9. Confirm E2SC is started:
-   - E2SC: `ssh dev12116 '/e2open/bin/eoadmin setup status'`
+   - E2SC: `ssh dev7746 '/e2open/bin/eoadmin setup status'`
 10. Only after E2SC is confirmed started, run `setup start` on E2NA:
-   - E2NA: `ssh dev12115 '/e2open/bin/eoadmin setup start'`
+   - E2NA: `ssh dev7745 '/e2open/bin/eoadmin setup start'`
 11. Confirm E2NA is started:
-   - E2NA: `ssh dev12115 '/e2open/bin/eoadmin setup status'`
+   - E2NA: `ssh dev7745 '/e2open/bin/eoadmin setup status'`
 12. If either `setup start` command or either post-start status check fails,
     perform one startup recovery attempt:
     - On both E2SC and E2NA, remove `*.zip` and `*.txt` files from
-      `/e2open/var/shared/e2sc/upDn/pkgio`.
-    - Run `setup forcestop` on E2SC and E2NA in parallel.
+      `/e2open/var/shared/e2sc/upDn/pkgio` using eoadmin:
+      `ssh <host> '/e2open/bin/eoadmin "rm -f /e2open/var/shared/e2sc/upDn/pkgio/*.zip /e2open/var/shared/e2sc/upDn/pkgio/*.txt"'`.
+      A plain `rm` fails with permission denied because the files are owned by eoadmin.
     - Retry only the ordered startup sequence: start E2SC, confirm E2SC is
       started, start E2NA, confirm E2NA is started.
     - If the recovery startup sequence still fails, search the install pkglog
@@ -117,7 +118,7 @@ Deployment order:
 13. After both E2SC and E2NA are confirmed started, send a startup email
     notification. The deployment runner sends this from
     `noReply@e2open.com` to `DEPLOY_EMAIL_TO`, which defaults to
-    `taiyong.kueh@wisetechglobal.com`. The envelope sender also defaults to
+    `weiliang.yee@wisetechglobal.com,taiyong.kueh@wisetechglobal.com`. The envelope sender also defaults to
     `noReply@e2open.com` through `DEPLOY_EMAIL_ENVELOPE_FROM`. Use
     `DEPLOY_EMAIL_ENABLED=false` to skip the email, or set `DEPLOY_EMAIL_CC` to
     copy additional recipients.
@@ -126,7 +127,7 @@ Deployment order:
     queues:
 
     ```bash
-    ssh dev12115 'bash -s' <<'REMOTE'
+    ssh dev7745 'bash -s' <<'REMOTE'
     BASE="http://127.0.0.1:11080/e2na"
     USERNAME="intel-dev-root"
     CJ="/tmp/e2na_cookie_$$.txt"
@@ -165,7 +166,7 @@ Deployment order:
     currently abortable:
 
     ```bash
-    ssh dev12115 'bash -s' <<'REMOTE'
+    ssh dev7745 'bash -s' <<'REMOTE'
     BASE="http://127.0.0.1:11080/e2na"
     USERNAME="intel-dev-root"
     PROP="/e2open/config/system.properties"
@@ -245,9 +246,9 @@ Guardrails:
   commands have completed successfully.
 - Run E2SC `setup start` before E2NA `setup start`.
 - Do not run E2NA `setup start` until E2SC is confirmed started.
-- If the ordered start sequence fails, clean `*.zip` and `*.txt` files from
-  `/e2open/var/shared/e2sc/upDn/pkgio` on both servers, run `setup forcestop`
-  on both servers, and retry the ordered start sequence once.
+- If the ordered start sequence fails, remove `*.zip` and `*.txt` files from
+  `/e2open/var/shared/e2sc/upDn/pkgio` on both servers using eoadmin, then retry
+  the ordered start sequence once.
 - Do not retry startup more than once. If the recovery attempt fails, grep the
   failing server's install pkglog for `error`, write the matching lines into
   the deployment log, then stop and report the failed server and command.
