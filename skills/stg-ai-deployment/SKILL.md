@@ -1,5 +1,5 @@
 ---
-name: stg-AI-Deployment
+name: stg-ai-deployment
 description: e2sc & e2na Automates deployment and validation.
 disable-model-invocation: true
 ---
@@ -140,8 +140,9 @@ Deployment order:
 17. If any `setup start` command or any post-start status check fails,
     perform one startup recovery attempt:
     - On both E2SC and E2NA, remove `*.zip` and `*.txt` files from
-      `/e2open/var/shared/e2sc/upDn/pkgio`.
-    - Run `setup forcestop` on E2SC and E2NA in parallel.
+      `/e2open/var/shared/e2sc/upDn/pkgio` using eoadmin:
+      `ssh <host> '/e2open/bin/eoadmin "rm -f /e2open/var/shared/e2sc/upDn/pkgio/*.zip /e2open/var/shared/e2sc/upDn/pkgio/*.txt"'`.
+      A plain `rm` fails with permission denied because the files are owned by eoadmin.
     - Retry only the ordered startup sequence: start E2SC, confirm E2SC is
       started, start E2NA, confirm E2NA is started, and if IM `setup config`
       succeeded, start IM and confirm IM is started.
@@ -343,9 +344,9 @@ Guardrails:
 - Do not run E2NA `setup start` until E2SC is confirmed started.
 - Do not run IM `setup start` until E2NA is confirmed started and only if IM
     `setup config` succeeded.
-- If the ordered start sequence fails, clean `*.zip` and `*.txt` files from
-  `/e2open/var/shared/e2sc/upDn/pkgio` on both servers, run `setup forcestop`
-  on both servers, and retry the ordered start sequence once.
+- If the ordered start sequence fails, remove `*.zip` and `*.txt` files from
+  `/e2open/var/shared/e2sc/upDn/pkgio` on both servers using eoadmin, then retry
+  the ordered start sequence once.
 - Do not retry startup more than once. If the recovery attempt fails, grep the
   failing server's install pkglog for `error`, write the matching lines into
   the deployment log, then stop and report the failed server and command.
