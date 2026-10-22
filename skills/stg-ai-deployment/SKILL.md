@@ -158,8 +158,9 @@ Deployment order:
     notification. IM is optional for this step.
     notification. The deployment runner sends this from
     `noReply@e2open.com` to `DEPLOY_EMAIL_TO`, which defaults to
-    `taiyong.kueh@wisetechglobal.com`. The envelope sender also defaults to
-    `noReply@e2open.com` through `DEPLOY_EMAIL_ENVELOPE_FROM`. Use
+    `taiyong.kueh@wisetechglobal.com`. Mail is
+    submitted to the relay `mailhost` on port 25; override with
+    `DEPLOY_EMAIL_RELAY`. Use
     `DEPLOY_EMAIL_ENABLED=false` to skip the email, or set `DEPLOY_EMAIL_CC` to
     copy additional recipients.
 
