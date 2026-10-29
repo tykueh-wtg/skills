@@ -32,8 +32,7 @@ Required behavior:
    user explicitly provides different server names.
 2. Preserve the required phase ordering below.
 3. Stop immediately if any command fails, and report which server and command
-    failed. Exception: during `setup forcestop` or `setup remove`, if a host
-    returns `e2am (...) script is not installed: ...`, continue deployment and
+    failed, and send the failure email described under Error notification. Exception: during `setup forcestop` or `setup remove`, if a host returns `e2am (...) script is not installed: ...`, continue deployment and
     proceed to `setup install` phases. Exception: if IM `setup config` fails,
     log a warning, skip IM startup for that run, and continue with E2SC/E2NA
     startup only.
@@ -312,7 +311,20 @@ Deployment order:
         boolean isDevLoginEnabled =  "dev".equals(Configuration.getProperty("e2.env.subtype")) || 
                              Configuration.getBooleanProperty("e2na.devlogin.enabled",false);
         ```
-
+Error notification:
+- Send this email whenever any command, status check, startup recovery, or pkgio
+  cleanup fails. Do not send it for a run skipped because another deployment
+  holds the lock.
+- Send from `noReply@e2open.com` to `DEPLOY_EMAIL_TO`, which defaults to the
+  same recipients as the startup email. Submit it to relay `mailhost` on port
+  25; override with `DEPLOY_EMAIL_RELAY`. Honor `DEPLOY_EMAIL_ENABLED=false`.
+- Subject: `E2SC/E2NA deployment: FAILED on <host>`.
+- Body: the failed server, the failed command or phase, the matching error lines
+  from the output, and the deployment log path. If startup recovery ran, include
+  the `error` lines from the failing server's install pkglog.
+- Send once, before stopping. If the relay rejects the email, log a warning and
+  still stop.
+  
 Guardrails:
 - Temporarily force-enable `devlogin.jsp` to `true` using `/e2open/bin/eoadmin`
     with `sed -i` before
@@ -361,4 +373,5 @@ Guardrails:
 - Restore `devlogin.jsp` to its original boolean logic using
     `/e2open/bin/eoadmin` with `perl -i` after queue start and scheduler abort
     operations are complete. Do not rely on a backup file.
-- If any command fails, stop and report which server and command failed.
+- If any command fails, send the error notification email, then stop and report
+  which server and command failed.

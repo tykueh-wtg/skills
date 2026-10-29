@@ -30,7 +30,8 @@ Required behavior:
    provides different server names.
 2. Preserve the required phase ordering below.
 3. Stop immediately if any command fails, and report which server and command
-   failed.
+   failed, and send the failure email described under Error notification. Exception: during `setup forcestop` or `setup remove`, if a host returns `e2am (...) script is not installed: ...`, continue deployment and
+    proceed to `setup install` phases.
 
 Deployment order:
 1. Stop all E2NA process queues before running any `setup forcestop`
@@ -88,10 +89,14 @@ Deployment order:
 2. Run `setup forcestop` on E2SC and E2NA in parallel:
    - E2SC: `ssh dev12081 '/e2open/bin/eoadmin setup forcestop'`
    - E2NA: `ssh dev12080 '/e2open/bin/eoadmin setup forcestop'`
+   If a host reports `e2am (...) script is not installed:` for forcestop,
+    treat it as a warning and continue to the next phase.
 3. After both `forcestop` commands complete successfully, run `setup remove`
    on E2SC and E2NA in parallel:
    - E2SC: `ssh dev12081 '/e2open/bin/eoadmin setup remove'`
    - E2NA: `ssh dev12080 '/e2open/bin/eoadmin setup remove'`
+   If a host reports `e2am (...) script is not installed:` for remove,
+    treat it as a warning and continue to the next phase.
 4. After both `remove` commands complete successfully, run `setup install`
    on E2SC and E2NA in parallel:
    - E2SC: `ssh dev12081 '/e2open/bin/eoadmin setup install'`
@@ -273,6 +278,19 @@ Deployment order:
     done
     REMOTE
     ```
+Error notification:
+- Send this email whenever any command, status check, startup recovery, or pkgio
+  cleanup fails. Do not send it for a run skipped because another deployment
+  holds the lock.
+- Send from `noReply@e2open.com` to `DEPLOY_EMAIL_TO`, which defaults to the
+  same recipients as the startup email. Submit it to relay `mailhost` on port
+  25; override with `DEPLOY_EMAIL_RELAY`. Honor `DEPLOY_EMAIL_ENABLED=false`.
+- Subject: `E2SC/E2NA deployment: FAILED on <host>`.
+- Body: the failed server, the failed command or phase, the matching error lines
+  from the output, and the deployment log path. If startup recovery ran, include
+  the `error` lines from the failing server's install pkglog.
+- Send once, before stopping. If the relay rejects the email, log a warning and
+  still stop.
 
 Guardrails:
 - Stop E2NA process queues before running any `setup forcestop` command.
@@ -295,5 +313,6 @@ Guardrails:
 - Send the startup email only after both E2SC and E2NA are confirmed started.
 - Abort currently abortable E2NA schedules only after all E2NA process queues
   are started.
-- If any command fails, stop and report which server and command failed.
+- If any command fails, send the error notification email, then stop and report
+  which server and command failed.
 - Every E2NA console request sends `csrfToken`. Fail the E2NA login if the final URL contains `devlogin` or `csrfTokenerror`, or if no token is found on `main.action`.
