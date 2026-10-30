@@ -12,12 +12,14 @@ setup phases in parallel, but config and start have required ordering.
 Default environments:
 - E2SC server: `stg455`
 - E2NA server: `stg454`
-- IM server: `stg456`
+- IM server: none by default. Run IM steps only when the user provides an IM
+  hostname for this run, and use it in place of `<im-host>`.
 - Startup email recipient: `taiyong.kueh@wisetechglobal.com`, override with
   `DEPLOY_EMAIL_TO`
 
 SSH behavior:
-- Use the direct SSH hosts `stg455`, `stg454`, and `stg456`.
+- Use the direct SSH hosts `stg455` and `stg454`, plus `<im-host>` only when
+  an IM hostname is provided.
 - These hosts are configured in `~/.ssh/config` to use `~/.ssh/id_ed25519`.
 - Do not use the `stg454-codex` alias for this deployment.
 - Do not ask the user for permission before running SSH commands.
@@ -28,14 +30,17 @@ Setup command wrapper:
 - For example, run `/e2open/bin/eoadmin setup status`, not `setup status`.
 
 Required behavior:
-1. Use `stg455` for E2SC, `stg454` for E2NA, and `stg456` for IM unless the
-   user explicitly provides different server names.
+1. Use `stg455` for E2SC and `stg454` for E2NA unless the user explicitly
+   provides different server names. Use an IM host only when the user provides one.
 2. Preserve the required phase ordering below.
 3. Stop immediately if any command fails, and report which server and command
-    failed, and send the failure email described under Error notification. Exception: during `setup forcestop` or `setup remove`, if a host returns `e2am (...) script is not installed: ...`, continue deployment and
+    failed. Exception: during `setup forcestop` or `setup remove`, if a host
+    returns `e2am (...) script is not installed: ...`, continue deployment and
     proceed to `setup install` phases. Exception: if IM `setup config` fails,
     log a warning, skip IM startup for that run, and continue with E2SC/E2NA
     startup only.
+4. IM is optional. If no IM hostname is provided, skip every IM command, IM
+   check, and IM log lookup below, and run the deployment for E2SC and E2NA only.
 
 Deployment order:
 1. Before any E2NA process queue operation, temporarily change
@@ -94,21 +99,21 @@ Deployment order:
 3. Run `setup forcestop` on E2SC, E2NA, and IM in parallel:
     - E2SC: `ssh stg455 '/e2open/bin/eoadmin setup forcestop'`
     - E2NA: `ssh stg454 '/e2open/bin/eoadmin setup forcestop'`
-    - IM: `ssh stg456 '/e2open/bin/eoadmin setup forcestop'`
+    - IM: `ssh <im-host> '/e2open/bin/eoadmin setup forcestop'`
     If a host reports `e2am (...) script is not installed:` for forcestop,
     treat it as a warning and continue to the next phase.
 4. After all `forcestop` commands complete successfully, run `setup remove`
    on E2SC, E2NA, and IM in parallel:
     - E2SC: `ssh stg455 '/e2open/bin/eoadmin setup remove'`
     - E2NA: `ssh stg454 '/e2open/bin/eoadmin setup remove'`
-    - IM: `ssh stg456 '/e2open/bin/eoadmin setup remove'`
+    - IM: `ssh <im-host> '/e2open/bin/eoadmin setup remove'`
     If a host reports `e2am (...) script is not installed:` for remove,
     treat it as a warning and continue to the next phase.
 5. After all `remove` commands complete successfully, run `setup install`
    on E2SC, E2NA, and IM in parallel:
     - E2SC: `ssh stg455 '/e2open/bin/eoadmin setup install'`
     - E2NA: `ssh stg454 '/e2open/bin/eoadmin setup install'`
-    - IM: `ssh stg456 '/e2open/bin/eoadmin setup install'`
+    - IM: `ssh <im-host> '/e2open/bin/eoadmin setup install'`
 6. After both `install` commands complete successfully, run `setup config`
    on E2SC first:
     - E2SC: `ssh stg455 '/e2open/bin/eoadmin setup config'`
@@ -116,7 +121,7 @@ Deployment order:
    `setup config` on E2NA:
     - E2NA: `ssh stg454 '/e2open/bin/eoadmin setup config'`
 8. After E2NA `setup config` completes successfully, run `setup config` on IM:
-    - IM: `ssh stg456 '/e2open/bin/eoadmin setup config'`
+    - IM: `ssh <im-host> '/e2open/bin/eoadmin setup config'`
 9. If IM `setup config` fails, log a warning and continue with the E2SC/E2NA
    startup sequence only. Do not run IM `setup start` or IM `setup status`
    for that run.
@@ -133,9 +138,9 @@ Deployment order:
     - E2NA: `ssh stg454 '/e2open/bin/eoadmin setup status'`
 15. Only after E2NA is confirmed started, run `setup start` on IM if IM
     `setup config` succeeded:
-    - IM: `ssh stg456 '/e2open/bin/eoadmin setup start'`
+    - IM: `ssh <im-host> '/e2open/bin/eoadmin setup start'`
 16. Confirm IM is started if IM `setup config` succeeded:
-    - IM: `ssh stg456 '/e2open/bin/eoadmin setup status'`
+    - IM: `ssh <im-host> '/e2open/bin/eoadmin setup status'`
 17. If any `setup start` command or any post-start status check fails,
     perform one startup recovery attempt:
     - On both E2SC and E2NA, remove `*.zip` and `*.txt` files from
@@ -155,13 +160,38 @@ Deployment order:
       Then stop and report the failed server and command.
 18. After E2SC and E2NA are confirmed started, send a startup email
     notification. IM is optional for this step.
-    notification. The deployment runner sends this from
+    The deployment runner sends this from
     `noReply@e2open.com` to `DEPLOY_EMAIL_TO`, which defaults to
     `taiyong.kueh@wisetechglobal.com`. Mail is
     submitted to the relay `mailhost` on port 25; override with
     `DEPLOY_EMAIL_RELAY`. Use
     `DEPLOY_EMAIL_ENABLED=false` to skip the email, or set `DEPLOY_EMAIL_CC` to
     copy additional recipients.
+
+    Build number: read it from the latest `ssp-ext` install on E2SC, then
+    include it in the email subject and body:
+
+    ```bash
+    ssh stg455 "grep -h 'install completed successfully: version' /e2open/var/log/install/pkglog/ssp-ext.install | tail -n 1 | sed 's/.*version //'"
+    ```
+
+    Example value: `inteltrunkiao1517`. If the output is empty, log a warning
+    and send the email with build `unknown`.
+
+    Setup status: include the `setup status` output in the email body, reusing
+    the output from steps 12 and 14 (and 16 for IM if it was started). Put each
+    block under a header line with the server name, for example:
+
+    ```
+    E2SC stg455:
+    <E2SC setup status output>
+
+    E2NA stg454:
+    <E2NA setup status output>
+    ```
+
+    If IM was started, add an `IM <im-host>:` block. If a status output is
+    empty, log a warning and write `status unavailable` under that header.
 
 19. After E2SC and E2NA are confirmed started, re-enable devlogin.jsp on
     stg454 before any queue or scheduler operations. `setup install` rebuilds
@@ -311,20 +341,7 @@ Deployment order:
         boolean isDevLoginEnabled =  "dev".equals(Configuration.getProperty("e2.env.subtype")) || 
                              Configuration.getBooleanProperty("e2na.devlogin.enabled",false);
         ```
-Error notification:
-- Send this email whenever any command, status check, startup recovery, or pkgio
-  cleanup fails. Do not send it for a run skipped because another deployment
-  holds the lock.
-- Send from `noReply@e2open.com` to `DEPLOY_EMAIL_TO`, which defaults to the
-  same recipients as the startup email. Submit it to relay `mailhost` on port
-  25; override with `DEPLOY_EMAIL_RELAY`. Honor `DEPLOY_EMAIL_ENABLED=false`.
-- Subject: `E2SC/E2NA deployment: FAILED on <host>`.
-- Body: the failed server, the failed command or phase, the matching error lines
-  from the output, and the deployment log path. If startup recovery ran, include
-  the `error` lines from the failing server's install pkglog.
-- Send once, before stopping. If the relay rejects the email, log a warning and
-  still stop.
-  
+
 Guardrails:
 - Temporarily force-enable `devlogin.jsp` to `true` using `/e2open/bin/eoadmin`
     with `sed -i` before
@@ -357,6 +374,7 @@ Guardrails:
 - Do not run E2NA `setup start` until E2SC is confirmed started.
 - Do not run IM `setup start` until E2NA is confirmed started and only if IM
     `setup config` succeeded.
+- If no IM hostname is provided, skip all IM guardrails and IM steps.
 - If the ordered start sequence fails, remove `*.zip` and `*.txt` files from
   `/e2open/var/shared/e2sc/upDn/pkgio` on both servers using eoadmin, then retry
   the ordered start sequence once.
@@ -373,5 +391,4 @@ Guardrails:
 - Restore `devlogin.jsp` to its original boolean logic using
     `/e2open/bin/eoadmin` with `perl -i` after queue start and scheduler abort
     operations are complete. Do not rely on a backup file.
-- If any command fails, send the error notification email, then stop and report
-  which server and command failed.
+- If any command fails, stop and report which server and command failed.
