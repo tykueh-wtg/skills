@@ -50,6 +50,19 @@ Preflight (before step 1; nothing destructive runs until these pass):
     require IM unless explicitly skipped, and recipients unless email is disabled.
 - If required settings are missing, stop before SSH. Never request or store
     passwords. Substitute the resolved hostnames and login user in all examples.
+- Before any HTTP request to E2NA, check status with
+    `ssh "$E2NA_HOST" '/e2open/bin/eoadmin setup status' < /dev/null`. If the
+    command succeeds but reports no E2NA server status, do not make an HTTP
+    request; skip the queue-stop operation and proceed to the next
+    `setup forcestop` step. Apply the same rule if the status check after a
+    readiness start reports no E2NA server status. If the overall status is
+    `stopped`, run
+    `ssh "$E2NA_HOST" '/e2open/bin/eoadmin setup start' < /dev/null`, then
+    check status again. Continue to the localhost login only when status
+    confirms E2NA is started. If a command fails or a nonempty status is
+    ambiguous, stop before making an HTTP request. This
+    conditional readiness start is the only `setup start` allowed before the
+    ordered deployment startup sequence.
 
 Required behavior:
 1. Use only the resolved settings in every command and result header below;
@@ -78,7 +91,12 @@ Deployment order:
     If `devlogin.jsp` does not exist at this step, log a warning and continue.
 
 2. Stop all E2NA process queues before running any `setup forcestop`
-   command:
+    command. Before connecting to `127.0.0.1:11080`, apply the E2NA readiness
+    check above and confirm its status is started. If it reports `stopped`, run
+    `setup start` and confirm the started status before connecting:
+    If the successful status command reports no E2NA server status, skip this
+    step's login and queue-stop operation and proceed to the next
+    `setup forcestop` step.
     If `devlogin.jsp` does not exist, log a warning and skip this step.
 
    ```bash
@@ -146,9 +164,10 @@ Deployment order:
 9. If IM `setup config` fails, log a warning and continue with the E2SC/E2NA
    startup sequence only. Do not run IM `setup start` or IM `setup status`
    for that run.
-10. Do not run any `setup start` command until E2NA `setup config` has
-   completed successfully. If IM `setup config` succeeded, wait for that too
-   before any `setup start` command.
+10. Except for the conditional E2NA readiness start in step 2, do not run any
+    deployment `setup start` command until E2NA `setup config` has completed
+    successfully. If IM `setup config` succeeded, wait for that too before any
+    deployment `setup start` command.
 11. After the required `setup config` commands complete successfully, run `setup start` on E2SC:
     - E2SC: `ssh $E2SC_HOST '/e2open/bin/eoadmin setup start'`
 12. Confirm E2SC is started:
@@ -351,7 +370,10 @@ Guardrails:
         or aborting schedules.
     `setup install` rebuilds the file to its original logic, so the in-place
     change from step 1 is no longer present by the time the servers start.
-- Stop E2NA process queues before running any `setup forcestop` command.
+- Stop E2NA process queues before running any `setup forcestop` command, except
+    when the successful E2NA `setup status` command reports no server status;
+    in that case skip step 2's login and queue-stop operation and proceed to
+    the next `setup forcestop` step.
 - If `setup forcestop` or `setup remove` fails only because
     `e2am (...) script is not installed: ...`, continue with `setup install`
     instead of stopping the deployment.
@@ -360,14 +382,18 @@ Guardrails:
 - Do not run E2NA `setup config` until E2SC `setup config` succeeds.
 - Do not run IM `setup config` until E2NA `setup config` succeeds.
 - Do not run E2SC `setup start` immediately after E2SC `setup config`.
-- Do not run any `setup start` until E2SC and E2NA `setup config`
-    commands have completed successfully.
-- If IM `setup config` succeeds, do not run any `setup start` until IM
-    `setup config` has also completed successfully.
+- Except for the conditional E2NA readiness start in step 2, do not run any
+    deployment `setup start` until E2SC and E2NA `setup config` commands have
+    completed successfully.
+- If IM `setup config` succeeds, do not run any deployment `setup start` until
+    IM `setup config` has also completed successfully.
 - If IM `setup config` fails, log a warning, skip IM startup, and continue
     with E2SC/E2NA startup only.
-- Run E2SC `setup start` before E2NA `setup start`.
-- Do not run E2NA `setup start` until E2SC is confirmed started.
+- In the ordered deployment startup, run E2SC `setup start` before E2NA
+    `setup start`.
+- Do not run the ordered deployment E2NA `setup start` until E2SC is confirmed
+    started. The step 2 readiness start only makes the E2NA console available
+    so queues can be stopped before `setup forcestop`.
 - Do not run IM `setup start` until E2NA is confirmed started and only if IM
     `setup config` succeeded.
 - If the ordered start sequence fails, remove `*.zip` and `*.txt` files from
